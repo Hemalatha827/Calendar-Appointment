@@ -1,0 +1,86 @@
+function doPost(e) {
+  // Parse the incoming JSON data from the HTTP request
+  let dataLoad = JSON.parse(e.postData.contents);
+
+  let response;
+
+  const slotFull = checkExistingEvent(dataLoad.booking_date, dataLoad.calendar_id, dataLoad.event_name);
+
+  if (slotFull) {
+    const availableSlots = getNextAvailableSlots(dataLoad.booking_date, dataLoad.calendar_id);
+    response = suggestNextAvailableSlots(availableSlots, dataLoad.channel);
+  } else {
+    const event = blockCalenderSlot(dataLoad);
+    if (event.success) {
+      response = {
+        "actions": createCUFActions(
+          [GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.SET_CUF, "appointment_status", true],
+          [GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.SET_CUF, "gmeet_link", event.gmeet_link],
+          [GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.SET_CUF, "event_id", event.event_id]
+        )
+
+      }
+    } else {
+      response = {
+        "actions": createCUFActions(
+          [GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.SET_CUF, "appointment_status", false]
+        )
+
+      }
+    }
+  }
+
+  // Convert the response object to a JSON-formatted string and return it
+  //console.log(JSON.stringify(response));
+  return ContentService.createTextOutput(JSON.stringify(response));
+
+}
+
+function blockCalenderSlot(input) {
+  const inputBookingDate = input["booking_date"];
+  const inputEmail = input["input_email"];
+  const inputCalendarId = input["calendar_id"];
+  const eventName = input["event_name"] + " for " + input["user_name"];
+
+  return createEvent(inputBookingDate, inputEmail, inputCalendarId, eventName);
+
+}
+
+
+
+function checkExistingEvent(bookingDate, calendarId) {
+  var startDate = new Date(bookingDate);
+  var endDate = new Date(startDate.getTime() + (30 * 60 * 1000));
+  var isoStartDate = Utilities.formatDate(startDate, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+  var isoEndDate = Utilities.formatDate(endDate, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+
+  let calendar = CalendarApp.getCalendarById(calendarId);
+
+  if (!calendar) {
+    return false;
+  }
+
+  var userEvents = calendar.getEvents(new Date(isoStartDate), new Date(isoEndDate));
+
+  return userEvents.length > 0;
+}
+
+
+
+//Function to test the createJavaEvent and createPythonEvent functions
+function testCreateEvents() {
+
+  const inputPostData = {
+    "booking_date": "06 February 2024 17:00",
+    "input_email": "hemalathagovindarajan1234@gmail.com",
+    "calendar_id": "d2348910a8fa9b2a1f59c417262cd6f4a04fa93635386b292c50f4dea10bc79f@group.calendar.google.com",
+    "event_name": "Botamation Live Demo",
+    "user_name": "Hemalatha",
+    "channel": "Messenger"
+  };
+
+  const response = doPost({ postData: { contents: JSON.stringify(inputPostData) } });
+  console.log(response.getContent());
+}
+
+

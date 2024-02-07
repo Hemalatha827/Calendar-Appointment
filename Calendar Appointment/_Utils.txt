@@ -1,0 +1,276 @@
+
+function blockVacationDays(fromDate, toDate, calendarId, eventName) {
+
+  try {
+    let calendar = CalendarApp.getCalendarById(calendarId);
+
+    if (!calendar) {
+      return {
+        "error": "Calendar not found"
+      };
+    }
+
+    const startDate = new Date(fromDate);
+    const endDate = new Date(toDate);
+    if (!toDate) {
+      endDate = startDate;
+    }
+
+    const dateSeries = generateDateSeries(startDate, endDate);
+    // Create a multiple-day all-day event
+    dateSeries.forEach((date) => {
+
+      // Set the start and end times for the event (0 am to 11:59 pm)
+      const startTime = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+      const endTime = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 0);
+
+      calendar.createEvent(eventName, startTime, endTime);
+
+    });
+
+    return {
+      "status": "success"
+    };
+
+  } catch (e) {
+    return {
+      "status": "error",
+      "message": e
+    };
+  }
+}
+
+function createEvent(inputDate, userEmail, calendarId, eventName) {
+  var startDate = new Date(inputDate);
+  var endDate = new Date(startDate.getTime() + (30 * 60 * 1000));
+  var startDate = Utilities.formatDate(startDate, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+  var endDate = Utilities.formatDate(endDate, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+
+  try {
+    let calendar = CalendarApp.getCalendarById(calendarId);
+
+    if (!calendar) {
+      return {
+        "error": "Calendar not found"
+      };
+    }
+
+    var event = {
+      summary: eventName,
+      location: 'Google meet',
+      description: userEmail,
+      start: {
+        dateTime: startDate,
+        timeZone: 'Asia/Calcutta',
+      },
+      end: {
+        dateTime: endDate,
+        timeZone: 'Asia/Calcutta',
+      },
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'email', minutes: 15 }, // 15 minutes before
+          { method: 'email', minutes: 60 }, // 1 hour before
+          { method: 'email', minutes: 48 * 60 } // 2 days before
+        ],
+      },
+      attendees: [
+        { email: userEmail },
+      ],
+      conferenceData: {
+        createRequest: {
+          conferenceSolutionKey: {
+            type: 'hangoutsMeet',
+          },
+          requestId: 'Hangout',
+        },
+      },
+    };
+
+    var createdEvent = Calendar.Events.insert(event, calendarId, {
+      conferenceDataVersion: 1,
+      sendUpdates: "all"
+    });
+
+    var hangoutLink = createdEvent.hangoutLink;
+
+    return {
+      "success": true,
+      "event_id": createdEvent.id,
+      "gmeet_link": hangoutLink
+    };
+  } catch (e) {
+    return {
+      "success": false,
+      "error": e.message
+    };
+  }
+}
+
+function deleteEvent(fromDate, toDate, calendarId, eventName) {
+
+  try {
+    let calendar = CalendarApp.getCalendarById(calendarId);
+
+    if (!calendar) {
+      return {
+        "error": "Calendar not found"
+      };
+    }
+
+    const startDate = new Date(fromDate);
+    const endDate = new Date(toDate);
+    if (!toDate) {
+      endDate = startDate;
+    }
+
+    let events = calendar.getEvents(startDate, endDate, { search: eventName });
+
+    // Loop through events and delete them
+    events.forEach((event) => {
+      event.deleteEvent();
+    });
+
+    return {
+      "status": "success"
+    };
+  } catch (e) {
+    return {
+      "status": "error",
+      "message": e
+    };
+  }
+}
+
+function pickClosestSlots(interestedSlot, availableSlots, numberOfSlots) {
+  // Convert the interested slot to a Date object for easier comparison
+  const interestedTime = new Date(`2000-01-01T${interestedSlot}`);
+
+  // Calculate the time differences and create an array of objects with slot and time difference
+  const timeDifferences = availableSlots.map(slot => {
+    const currentTime = new Date(`2000-01-01T${slot}`);
+    const difference = Math.abs(currentTime - interestedTime);
+    return { slot, difference };
+  });
+
+  // Sort the array based on time differences
+  timeDifferences.sort((a, b) => a.difference - b.difference);
+
+  // Extract the first numberOfSlots slots
+  const selectedSlots = timeDifferences.slice(0, numberOfSlots).map(item => item.slot);
+
+  return selectedSlots;
+}
+
+function generateTimeSlots(startTime, endTime, intervalMinutes) {
+  const timeSlots = [];
+  let currentSlot = new Date(`2000-01-01T${startTime}:00`);
+
+  while (currentSlot < new Date(`2000-01-01T${endTime}:00`)) {
+    const formattedTime = currentSlot.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    timeSlots.push(formattedTime);
+    currentSlot.setMinutes(currentSlot.getMinutes() + intervalMinutes);
+  }
+
+  return timeSlots;
+}
+
+function generateDateSeries(fromDate, toDate) {
+  const dateSeries = [];
+
+  // Convert fromDate and toDate to Date objects
+  const startDate = new Date(fromDate);
+  const endDate = new Date(toDate);
+
+  // Iterate through the dates and add them to the array
+  for (let currentDate = startDate; currentDate <= endDate; currentDate.setDate(currentDate.getDate() + 1)) {
+    dateSeries.push(new Date(currentDate));
+  }
+
+  return dateSeries;
+}
+
+
+function generateTimings(bookedSlots, interestedSlot) {
+  const startTime = '09:00';
+  const endTime = '18:00';
+  const intervalMinutes = 30;
+
+  const allTimings = generateTimeSlots(startTime, endTime, intervalMinutes);
+
+
+  const availableSlots = allTimings.filter(slot => !bookedSlots.includes(slot));
+
+  let nearestAvailableTimings = [];
+
+  if (availableSlots) {
+    const numberOfSlotsToChoose = 3;
+
+    nearestAvailableTimings = pickClosestSlots(interestedSlot, availableSlots, numberOfSlotsToChoose);
+
+  }
+  // Convert time strings to Date objects for accurate sorting
+  nearestAvailableTimings = nearestAvailableTimings.sort((a, b) => {
+    const timeA = new Date(`2000-01-01T${a}`);
+    const timeB = new Date(`2000-01-01T${b}`);
+    return timeA - timeB;
+  });
+  return nearestAvailableTimings;
+
+
+}
+
+function createCUFActions(...data) {
+
+  const actions = [];
+
+  for (const currentValue of data) {
+    const operation = currentValue[0];
+    if (operation == GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.SEND_FLOW) {
+      actions.push({
+        "action": GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.SEND_FLOW,
+        "flow_id": currentValue[1]
+      });
+    } else if (operation == GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.ADD_TAG) {
+      actions.push({
+        "action": GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.ADD_TAG,
+        "tag_name": currentValue[1]
+      });
+    } else if (operation == GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.REMOVE_TAG) {
+      actions.push({
+        "action": GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.REMOVE_TAG,
+        "tag_name": currentValue[1]
+      });
+    } else if (operation == GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.SET_CUF) {
+      actions.push({
+        "action": GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.SET_CUF,
+        "field_name": currentValue[1],
+        "value": currentValue[2]
+      });
+    } else if (operation == GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.REMOVE_CUF) {
+      actions.push({
+        "action": GLOBAL.BOTAMATION_CUF_DATA_PROCESSING.REMOVE_CUF,
+        "field_name": currentValue[1]
+      });
+    }
+
+  }
+  return actions;
+}
+
+function createButtonOrQuickReply(type, displayTxt, ...data) {
+  const actions = createCUFActions(...data);
+  let buttonOrquickReply = {
+    "title": displayTxt,
+    "payload": JSON.stringify({ "actions": actions })
+  };
+
+  if (type == "button") {
+    buttonOrquickReply.type = "postback";
+  } else {
+    buttonOrquickReply.content_type = "text";
+  }
+
+  return buttonOrquickReply;
+}

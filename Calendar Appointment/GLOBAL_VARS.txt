@@ -1,0 +1,12 @@
+const GLOBAL = {
+  BOTAMATION_CUF_DATA_PROCESSING: {
+    SEND_FLOW: "send_flow",
+    SET_CUF: "set_field_value",
+    REMOVE_CUF: "unset_field_value",
+    ADD_TAG: "add_tag",
+    REMOVE_TAG: "remove_tag"
+  },
+
+  VACATION_EVENT_NAME : "Vacation"
+
+}

@@ -1,0 +1,24 @@
+function doPost(e) {
+  // Parse the incoming JSON data from the HTTP request
+  const dataLoad = JSON.parse(e.postData.contents);
+
+  const response = deleteEvent(dataLoad.from_date, dataLoad.to_date, dataLoad.calendar_id, dataLoad.event_name);
+
+  //console.log(JSON.stringify(response));
+  return ContentService.createTextOutput(JSON.stringify(response));
+
+}
+
+
+function testUnblockCal() {
+  const inputPostData = {
+    "from_date": "25 March 2024 12:00",
+    "to_date": "30 March 2024 12:00",
+    "calendar_id": "d2348910a8fa9b2a1f59c417262cd6f4a04fa93635386b292c50f4dea10bc79f@group.calendar.google.com",
+    "event_name": "Vacation"
+  };
+
+  const response = doPost({ postData: { contents: JSON.stringify(inputPostData) } });
+  console.log(response.getContent());
+
+}

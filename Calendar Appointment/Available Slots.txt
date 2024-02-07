@@ -1,0 +1,92 @@
+function doPost(e) {
+  // Parse the incoming JSON data from the HTTP request
+  let dataLoad = JSON.parse(e.postData.contents);
+
+  const availableSlots = getNextAvailableSlots(dataLoad.booking_date, dataLoad.calendar_id, dataLoad.event_name);
+  const response = suggestNextAvailableSlots(availableSlots, dataLoad.channel);
+
+  // Convert the response object to a JSON-formatted string and return it
+  //console.log(JSON.stringify(response));
+  return ContentService.createTextOutput(JSON.stringify(response));
+
+}
+
+
+
+function suggestNextAvailableSlots(availaleSlots, channel) {
+
+
+  if (channel != "Whatsapp") {
+    let message = "Sorry, requested slot is full. Please find the nearest available timings below";
+    if (availaleSlots.length == 0) {
+      message = "Sorry, no free slots are available for the day";
+    }
+    return {
+      "messages": [
+        {
+          "message": {
+            "text": message,
+            "quick_replies": availaleSlots.map(time => ({
+              "content_type": "text",
+              "title": `${time}`,
+              "payload": "value"
+            }))
+          }
+        }
+      ]
+    };
+  }
+
+}
+
+function getNextAvailableSlots(bookingDate, calendarId) {
+  const interestedDate = new Date(bookingDate);
+  const interestedSlot = `${interestedDate.getHours() < 10 ? '0' : ''}${interestedDate.getHours()}:${interestedDate.getMinutes() < 10 ? '0' : ''}${interestedDate.getMinutes()}`;
+
+  // Fetch existing events from the calendar
+  const calendar = CalendarApp.getCalendarById(calendarId);
+
+  //reset timings so that whole day events are fetched
+  const existingEvents = calendar.getEventsForDay(interestedDate);
+
+  if (existingEvents.length == 1) {
+    if (existingEvents[0].getTitle() == GLOBAL.VACATION_EVENT_NAME) {
+      return [];
+    }
+  }
+
+  // Initialize an object to store booked timings
+  const bookedSlots = [];
+
+  // Populate booked timings based on existing events
+  existingEvents.forEach(event => {
+    bookedSlots.push(event.getStartTime().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+  });
+
+  // Determine next available timings for Java and Python separately
+  let nextAvailableTimings = [];
+
+  if (bookedSlots.length > 0) {
+    nextAvailableTimings = generateTimings(bookedSlots, interestedSlot);
+  }
+
+  return nextAvailableTimings;
+}
+
+
+
+//Function to test the createJavaEvent and createPythonEvent functions
+function testNextAvailableSlot() {
+
+  const inputPostData = {
+    "booking_date": "30 March 2024 13:00",
+    "calendar_id": "d2348910a8fa9b2a1f59c417262cd6f4a04fa93635386b292c50f4dea10bc79f@group.calendar.google.com",
+    "event_name": "Botamation Live Demo",
+    "channel": "Messenger"
+  };
+
+  const response = doPost({ postData: { contents: JSON.stringify(inputPostData) } });
+  console.log(response.getContent());
+}
+
+
